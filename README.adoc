@@ -1,0 +1,11 @@
+= Ratpack Demo Project
+
+== Intro
+
+This is just a very small demo project to be able to run a Jenkins pipeline
+
+== Run the Application
+
+You can start the basic app with
+
+    ./gradlew run
