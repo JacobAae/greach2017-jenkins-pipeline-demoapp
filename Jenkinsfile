@@ -26,15 +26,15 @@ node {
         stage 'Static Code Analysis'
             unstash 'source'
             sh "./gradlew codenarcMain codenarcTest"
-            publishHTML(target: [reportDir:'build/reports/codenarc', reportFiles: 'main.html', reportName: 'Codenarc Main'])
-            publishHTML(target: [reportDir:'build/reports/codenarc', reportFiles: 'text.html', reportName: 'Codenarc Test'])
+            publishHTML(target: [allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir:'build/reports/codenarc', reportFiles: 'main.html', reportName: 'Codenarc Main'])
+            publishHTML(target: [allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir:'build/reports/codenarc', reportFiles: 'text.html', reportName: 'Codenarc Test'])
 
 
         stage 'Unit Tests'
             sh "./gradlew test"
 
             // publish JUnit results to Jenkins
-            step([$class: 'JUnitResultArchiver', testResults: '**/build/test-results/*.xml'])
+            step([$class: 'JUnitResultArchiver', testResults: '**/build/test-results/test/*.xml'])
 
             // save coverage reports for being processed during code quality phase.
             stash includes: 'build/jacoco/*.exec', name: 'codeCoverage'
@@ -43,7 +43,7 @@ node {
             unstash 'source'
             unstash 'codeCoverage'
             sh "./gradlew jacocoTestReport"
-            publishHTML(target: [reportDir:'build/jacocoHtml', reportFiles: 'index.html', reportName: 'Code Coverage'])
+            publishHTML(target: [reportDir:'build/reports/jacoco', reportFiles: 'index.html', reportName: 'Code Coverage'])
 
     } catch( Exception e) {
         currentBuild.result = "FAILURE"
