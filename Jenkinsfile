@@ -61,6 +61,7 @@ node {
 stage 'Docker Release'
 def releaseType
 timeout(time:2, unit:'HOURS') {
-    releaseType = input message: 'Release Docker Image?', ok: 'Yes', parameters: [[$class: 'ChoiceParameterDefinition', choices: 'Minor\nPatch\nMajor', description: 'Major,Minor or Patch', name: 'releaseType']]
+    inputValue = input message: 'Release Docker Image?', ok: 'Yes', submitterParameter: 'approver', parameters: [[$class: 'ChoiceParameterDefinition', choices: 'Minor\nPatch\nMajor', description: 'Major,Minor or Patch', name: 'releaseType']]
 }
 
+echo "${inputValue.approver} ${inputValue.releaseType}"
