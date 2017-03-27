@@ -27,7 +27,7 @@ node {
             unstash 'source'
             sh "./gradlew codenarcMain codenarcTest"
             publishHTML(target: [allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir:'build/reports/codenarc', reportFiles: 'main.html', reportName: 'Codenarc Main'])
-            publishHTML(target: [allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir:'build/reports/codenarc', reportFiles: 'text.html', reportName: 'Codenarc Test'])
+            publishHTML(target: [allowMissing: false, alwaysLinkToLastBuild: false, keepAll: true, reportDir:'build/reports/codenarc', reportFiles: 'test.html', reportName: 'Codenarc Test'])
 
 
         stage 'Unit Tests'
@@ -57,3 +57,10 @@ node {
         throw e
     }
 }
+
+stage 'Docker Release'
+def releaseType
+timeout(time:2, unit:'HOURS') {
+    releaseType = input message: 'Release Docker Image?', ok: 'Yes', parameters: [[$class: 'ChoiceParameterDefinition', choices: 'Minor\nPatch\nMajor', description: 'Major,Minor or Patch', name: 'releaseType']]
+}
+
