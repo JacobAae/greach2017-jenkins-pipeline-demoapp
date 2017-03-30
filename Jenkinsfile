@@ -49,8 +49,8 @@ node {
         currentBuild.result = "FAILURE"
 
         mail body: "Project build error: ${e}" ,
-            from: 'jenkins@greachconf.com',
-            replyTo: 'jenkins@greachconf.com',
+            from: 'jenkins@grydeske.com',
+            replyTo: 'jenkins@grydeske.com',
             subject: "Initial test/coverage or codenarc failed for ${env.JOB_NAME} - Build # ${env.BUILD_NUMBER}",
             to: "${env.CHANGE_AUTHOR_EMAIL}"
 
@@ -88,7 +88,9 @@ node {
             sh "./gradlew deploy${inputValue.releaseType}"
 
     stage 'Wait til ready'
-            sh "./gradlew waitForDeploy"
+            timeout(time:5, unit:'MINUTES') {
+                sh "./gradlew waitForDeploy"
+            }
             sleep 5 // Wait for application to startup after deployment
 
     stage 'Integration Tests'
