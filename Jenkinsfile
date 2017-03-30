@@ -85,7 +85,7 @@ node {
             }
 
     stage 'Deploy'
-            sh "./gradlew release${inputValue.releaseType}"
+            sh "./gradlew deploy${inputValue.releaseType}"
 
     stage 'Wait til ready'
             sh "./gradlew waitForDeploy"
