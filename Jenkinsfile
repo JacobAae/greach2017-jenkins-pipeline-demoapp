@@ -58,10 +58,57 @@ node {
     }
 }
 
-stage 'Docker Release'
+stage 'Docker Release?'
 def releaseType
 timeout(time:2, unit:'HOURS') {
     inputValue = input message: 'Release Docker Image?', ok: 'Yes', submitterParameter: 'approver', parameters: [[$class: 'ChoiceParameterDefinition', choices: 'Minor\nPatch\nMajor', description: 'Major,Minor or Patch', name: 'releaseType']]
+    echo "${inputValue.approver} ${inputValue.releaseType}"
 }
 
-echo "${inputValue.approver} ${inputValue.releaseType}"
+node {
+    stage 'Release and Push'
+            unstash 'source'
+            sh "git checkout ${env.BRANCH_NAME} && git pull" // Need to be on actual branch, not in deteached head state
+
+            switch( releaseType ) {
+                case 'Patch':
+                    sh "./gradlew releasePatch"
+                    break
+                case 'Minor':
+                    sh "./gradlew releaseMinor"
+                    break
+                case 'Major':
+                    sh "./gradlew releaseMajor"
+                    break
+                default:
+                    currentBuild.result = "FAILURE"
+            }
+
+    stage 'Deploy'
+            sh "./gradlew release${releaseType}"
+
+    stage 'Wait til ready'
+            sh "./gradlew waitForDeploy"
+            sleep 5 // Wait for application to startup after deployment
+
+    stage 'Integration Tests'
+        def integrationTestResult = build job: '/demoapp-integration-tests/master', wait: true, propagate: false
+        echo "Result: ${integrationTestResult.result}"
+
+    stage 'Finalize'
+        if( integrationTestResult.result == 'SUCCESS' ) {
+            echo "Tests passed - finishing upgrade"
+            sh "./gradlew -i approveDeploy"
+        } else {
+            echo "Tests failed with status ${integrationTestResult.result}"
+            sh "./gradlew -i rollbackDeploy"
+
+            currentBuild.result = "FAILURE"
+            // TODO Send error message
+        }
+}
+
+
+
+
+

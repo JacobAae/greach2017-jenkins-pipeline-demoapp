@@ -1,11 +1,17 @@
 buildscript {
   repositories {
     jcenter()
+    maven { url "https://jitpack.io" }
   }
   dependencies {
-    classpath "io.ratpack:ratpack-gradle:1.4.5"
-    classpath "com.github.jengelman.gradle.plugins:shadow:1.2.3"
+      classpath "com.github.objectpartners:rancher-java-sdk:master-SNAPSHOT"
+      classpath "io.ratpack:ratpack-gradle:1.4.5"
+      classpath "com.github.jengelman.gradle.plugins:shadow:1.2.3"
   }
+}
+
+plugins {
+    id 'com.bmuschko.docker-java-application' version '3.0.6'
 }
 
 apply plugin: "io.ratpack.ratpack-groovy"
@@ -15,6 +21,11 @@ apply plugin: "eclipse"
 apply plugin: "codenarc"
 apply plugin: "jacoco"
 
+
+
+group 'ratpack-demoapp'
+version '0.0.1'
+
 repositories {
   jcenter()
 }
@@ -23,7 +34,7 @@ dependencies {
   // Default SLF4J binding.  Note that this is a blocking implementation.
   // See here for a non blocking appender http://logging.apache.org/log4j/2.x/manual/async.html
   runtime 'org.slf4j:slf4j-simple:1.7.21'
-
+  compile "com.github.objectpartners:rancher-java-sdk:master-SNAPSHOT"
   testCompile "org.spockframework:spock-core:1.0-groovy-2.4"
 }
 
@@ -57,3 +68,192 @@ jacocoTestCoverageVerification {
         }
     }
 }
+
+docker {
+    url = "unix:///var/run/docker.sock"//project.hasProperty('dockerUrl') ? project.getProperty('dockerUrl') : System.env.DOCKER_HOST.replace('tcp', 'https')
+
+    registryCredentials {
+        url = 'https://docker.grydeske.com:5000'
+        username = 'greach'
+        password = 'greach2017'
+        email = 'greach2017@grydeske.dk'
+    }
+
+    // Configuration for Java application image.
+    javaApplication {
+
+        // Default value for maintainer is
+        // System.properties['user.name'].
+        maintainer = "Jacob Aae Mikkelsen <greach@grydeske.dk>"
+
+
+        // Exposed port.
+        port = 5050
+    }
+}
+
+
+/*
+dockerPushImage {
+    tag = "docker.grydeske.com:5000/demoapp"
+}
+
+docker tag jenkins:latest docker.grydeske.com:5000/greach-jenkins:latest
+docker push
+
+*/
+private getNextVersion(String currentVersion, String type) {
+    currentVersion.find(/(\d+)\.(\d+)\.(\d+)$/) { String all, String major, String minor, String patch ->
+        switch(type) {
+            case 'PATCH':
+                def patchNum = new Integer(patch)
+                patchNum++
+                return "${major}.${minor}.${patchNum}"
+            case 'MINOR':
+                def minorNum = new Integer(minor)
+                minorNum++
+                return "${major}.${minorNum}.0"
+            case 'MAJOR':
+                def majorNum = new Integer(major)
+                majorNum++
+                return "${majorNum}.0.0"
+        }
+    }
+}
+
+
+
+task releasePatch {
+    project.tasks['dockerBuildImage'].tag = "docker.grydeske.com:5000/greach:${getNextVersion(version,'PATCH')}"
+    dependsOn dockerBuildImage
+    finalizedBy dockerPushImage
+}
+
+task releaseMinor {
+    project.tasks['dockerBuildImage'].tag = "docker.grydeske.com:5000/greach:${getNextVersion(version,'MINOR')}"
+    dependsOn dockerBuildImage
+    finalizedBy dockerPushImage
+}
+
+task releaseMajor {
+    project.tasks['dockerBuildImage'].tag = "docker.grydeske.com:5000/greach:${getNextVersion(version,'MAJOR')}"
+    dependsOn dockerBuildImage
+    finalizedBy dockerPushImage
+}
+
+import io.rancher.Rancher
+import io.rancher.service.ServiceService
+import io.rancher.type.Service
+import io.rancher.type.ServiceUpgrade
+import io.rancher.type.InServiceUpgradeStrategy
+import retrofit2.Response
+
+
+private ServiceService getServiceApi() {
+    Rancher.Config config = new Rancher.Config(
+            new URL("https://rancher.grydeske.com/v1/"), "83013AC43AF2317F8206", "gnS1skzqeEVq8xc5deCPc2vXTkF4pAmYbtotMBD3")
+    Rancher rancher = new Rancher(config)
+    ServiceService serviceApi = rancher.type(io.rancher.service.ServiceService.class)
+
+    serviceApi
+}
+
+private Service getRancherService() {
+    Response<Collection<Service>> serviceRequest = getServiceApi().list().execute()
+    if (!serviceRequest.success) {
+        println "Auch - problems ${serviceRequest}"
+    }
+    List<Service> services = serviceRequest.body().data
+
+    Service thisService
+
+    for (Service s : services) {
+        if (s.getName() == "demoapp") {
+            thisService = s
+            break
+        }
+    }
+    thisService
+}
+
+
+private deploy(String version) {
+    ServiceService serviceApi = getServiceApi()
+    Service service = getRancherService()
+    assert service
+
+    service.launchConfig.imageUuid = "docker:docker.grydeske.com:5000/greach:${version}"
+    Response<Service> upgradeResp = serviceApi.upgrade(service.id, new ServiceUpgrade(
+            inServiceStrategy: new InServiceUpgradeStrategy(
+                    launchConfig: service.launchConfig,
+                    startFirst: true
+            )
+    )).execute()
+}
+
+task deployMajor {
+    doLast {
+        deploy(getNextVersion(version,'MAJOR'))
+    }
+}
+
+task deployMinor {
+    doLast {
+        deploy(getNextVersion(version,'MINOR'))
+    }
+}
+
+task deployPatch {
+    doLast {
+        deploy(getNextVersion(version,'PATCH'))
+    }
+}
+
+task waitForDeploy {
+    doLast {
+        ServiceService serviceApi = getServiceApi()
+        String serviceId = getRancherService().id
+
+        Response<Service> serviceRequest = serviceApi.get(serviceId).execute()
+        Service service = serviceRequest.body()
+
+        logger.quiet("Service: ${service}")
+
+        int count = 0
+        while( 'upgraded' != service?.state ) {
+            println "Waiting - as state is ${service?.state}"
+            sleep(1000) // Pause for 3 seconds before trying again
+            serviceRequest = serviceApi.get(serviceId).execute()
+            if (count > 240) {
+                throw new GradleException("Deploy takes too long")
+            }
+            count++
+            service = serviceRequest.body()
+        }
+
+    }
+}
+
+
+task approveDeploy {
+    doLast {
+        ServiceService serviceApi = getServiceApi()
+        String serviceId = getRancherService().id
+
+        Response<Service> response = serviceApi.finishupgrade(serviceId).execute()
+    }
+}
+
+
+
+task rollbackDeploy {
+    doLast {
+        ServiceService serviceApi = getServiceApi()
+        String serviceId = getRancherService().id
+
+        Response<Service> response = serviceApi.rollback(serviceId).execute()
+    }
+}
+
+
+
