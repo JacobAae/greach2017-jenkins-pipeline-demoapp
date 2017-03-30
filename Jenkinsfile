@@ -59,7 +59,7 @@ node {
 }
 
 stage 'Docker Release?'
-def releaseType
+def inputValue
 timeout(time:2, unit:'HOURS') {
     inputValue = input message: 'Release Docker Image?', ok: 'Yes', submitterParameter: 'approver', parameters: [[$class: 'ChoiceParameterDefinition', choices: 'Minor\nPatch\nMajor', description: 'Major,Minor or Patch', name: 'releaseType']]
     echo "${inputValue.approver} ${inputValue.releaseType}"
@@ -70,7 +70,7 @@ node {
             unstash 'source'
             sh "git checkout ${env.BRANCH_NAME} && git pull" // Need to be on actual branch, not in deteached head state
 
-            switch( releaseType ) {
+            switch( inputValue.releaseType ) {
                 case 'Patch':
                     sh "./gradlew releasePatch"
                     break
@@ -85,7 +85,7 @@ node {
             }
 
     stage 'Deploy'
-            sh "./gradlew release${releaseType}"
+            sh "./gradlew release${inputValue.releaseType}"
 
     stage 'Wait til ready'
             sh "./gradlew waitForDeploy"
