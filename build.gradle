@@ -1,5 +1,7 @@
 buildscript {
   repositories {
+    mavenLocal()
+    mavenCentral()
     jcenter()
     maven { url "https://jitpack.io" }
   }
@@ -27,7 +29,10 @@ group 'ratpack-demoapp'
 version '0.0.1'
 
 repositories {
-  jcenter()
+    mavenLocal()
+    mavenCentral()
+    jcenter()
+    maven { url "https://jitpack.io" }
 }
 
 dependencies {
