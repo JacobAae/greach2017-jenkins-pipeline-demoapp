@@ -11,7 +11,13 @@ ratpack {
   }
 
   handlers {
-    prefix("greeter") {
+    prefix("greach") {
+        get {
+            render("Awesome Conference")
+        }
+    }
+
+      prefix("greeter") {
         get(DemoHandler)
     }
     get {
